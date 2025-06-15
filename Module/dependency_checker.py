@@ -30,6 +30,24 @@ def version_satisfies(installed, required):
     from pkg_resources import parse_version
     return parse_version(installed) >= parse_version(required)
 
+def ask_user_gui(msg, title="Thiếu thư viện", yes_no=True):
+    """Hỏi người dùng qua PyQt6, trả về True/False hoặc None nếu không có PyQt6."""
+    try:
+        from PyQt6.QtWidgets import QApplication, QMessageBox
+        app_temp = QApplication.instance() or QApplication(sys.argv)
+        if yes_no:
+            reply = QMessageBox.question(
+                None, title, msg,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+            return reply == QMessageBox.StandardButton.Yes
+        else:
+            QMessageBox.information(None, title, msg)
+            return None
+    except ImportError:
+        return None
+
 def ask_user_terminal(msg, yes_no=True):
     """Hỏi người dùng qua terminal."""
     print(msg)
@@ -52,14 +70,17 @@ def check_and_install_dependencies():
     print("--- Kiểm tra các thư viện phụ thuộc ---")
     # module_name: (pip_name, min_version hoặc None)
     required_libs = {
-        "chardet": ("chardet", None),
-        "pandas": ("pandas", None),
-        "openpyxl": ("openpyxl", None),
-        "flashtext": ("flashtext", None),
-        "PIL": ("pillow", None),
+        "requests": ("requests", "2.25.0"),
         "tqdm": ("tqdm", None),
-        "numpy": ("numpy", None),
         "PyQt6": ("PyQt6", None),
+        "PIL": ("Pillow", None),
+        "numpy": ("numpy", "1.20.0"),
+        "cnocr": ("cnocr", None),
+        "fitz": ("PyMuPDF", None),
+        "pymupdf4llm": ("pymupdf4llm", None),
+        "vietocr": ("vietocr", None),
+        "torch": ("torch", "1.10.0"),
+        "torchvision": ("torchvision", None)
     }
 
     missing_libs = []
@@ -93,12 +114,16 @@ def check_and_install_dependencies():
         f"(Yêu cầu kết nối Internet và có thể mất vài phút)"
     )
 
-    user_agree = ask_user_terminal(msg)
+    # Ưu tiên hỏi qua GUI, nếu không có thì hỏi qua terminal
+    user_agree = ask_user_gui(msg)
+    if user_agree is None:
+        user_agree = ask_user_terminal(msg)
 
     if not user_agree:
         print("Bạn đã từ chối cài đặt tự động. Vui lòng tự cài đặt các thư viện còn thiếu.")
         return False
 
+    # Cài đặt từng package, không dừng lại khi gặp lỗi
     print("\n--- Bắt đầu quá trình cài đặt/cập nhật tự động ---")
     try:
         from tqdm import tqdm
@@ -119,10 +144,12 @@ def check_and_install_dependencies():
             f"Vui lòng mở Command Prompt hoặc Terminal và chạy lệnh sau:\n\n"
             f"pip install {' '.join(failed_libs)}"
         )
+        ask_user_gui(msg_error, title="Lỗi cài đặt", yes_no=False)
         ask_user_terminal(msg_error, yes_no=False)
         return False
     else:
         msg_done = "Đã cài đặt/cập nhật thành công các thư viện. Vui lòng khởi động lại chương trình."
+        ask_user_gui(msg_done, title="Hoàn tất", yes_no=False)
         ask_user_terminal(msg_done, yes_no=False)
         return True
 
